@@ -4,6 +4,7 @@ A [LangGraph](https://github.com/langchain-ai/langgraph) agent for **drug–drug
 
 > [!NOTE]
 > University project for the Natural Language Processing course (MSc Computer Science, A.Y. 2026/2027). Not intended for medical use: do not rely on it for medical advice.
+
 ## How it works
 
 1. **Identity check** (RxNorm): if the two mentions refer to the same drug, the pair is labelled `none` without calling any model.
@@ -53,7 +54,42 @@ pip install -r requirements.txt
 GOOGLE_API_KEY=your_key_here
 ```
 
-**Data.** The DDI Corpus is not redistributed here. Download it from the [original repository](https://github.com/isegura/DDICorpus) (CC BY-NC) and place the XML files in `data/raw/`, then run the data-preparation step (see `config.py` for the expected paths).
+## Data
+
+The DDI Corpus is not redistributed here. Download it (XML version) from the [original repository](https://github.com/isegura/DDICorpus) (CC BY-NC) and place it under `data/raw/`:
+
+```bash
+mkdir -p data/raw
+git clone https://github.com/isegura/DDICorpus.git data/raw/DDICorpus
+```
+
+### Preprocessing
+
+The preprocessing step parses the XML files and builds one JSONL record per drug pair, then draws the evaluation samples:
+
+```bash
+python -m <preprocessing_module>        # parsing + train/dev/test split
+python -m <sampling_module>             # dev_sample, test_sample
+python -m scripts.make_confirm_sample   # test_confirm (sentence-disjoint from test_sample)
+```
+
+What it does:
+
+- parses each document (sentences, drug mentions with text, type and character offsets, annotated pairs with their label);
+- builds one record per pair, with the two mentions marked by position as `<D1>...</D1>` and `<D2>...</D2>`, so that repeated mentions of the same drug are unambiguous;
+- keeps the official train/test split and derives a development set (`dev`) from the training set by assigning whole documents, so sentences from the same document never end up in different sets;
+- draws class-stratified samples with fixed seeds (42; 2026 for `test_confirm`), because the free tier of the models limits how many pairs can be evaluated.
+
+Outputs are written to `data/processed/` as `.jsonl` files. Expected sizes, as a sanity check:
+
+| Set | Pairs | Notes |
+|---|---|---|
+| `train` | 25,719 | 562 documents |
+| `dev` | 2,072 | 62 documents, taken from the training set |
+| `test` | 5,716 | 191 documents, official test set |
+| `dev_sample` | 105 | 40 `none`, 65 with interaction |
+| `test_sample` | 260 | 100 `none`, 160 with interaction |
+| `test_confirm` | 225 | 100 `none`, 125 with interaction |
 
 ## Usage
 
